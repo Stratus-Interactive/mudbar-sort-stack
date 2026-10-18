@@ -343,20 +343,21 @@ export function generateLevel(level: number, seed?: number): LevelData {
 }
 
 /**
- * Hand-tuned tutorial levels. Level 1 needs exactly 2 pours;
- * level 2 needs 4; level 3 needs 6. No text, just play.
+ * Hand-tuned tutorial levels. Pars are solver-verified minimums
+ * (verified 2026-10-18 — the old pars were wrong and L3 was unsolvable).
+ * No text, just play.
  */
 function tutorialLevel(level: number): LevelData {
   const layouts: Tube[][] = [
-    // L1: two pours to solve.
+    // L1: 3 pours. Teaches tap-source → tap-destination.
     [[0, 0, 1, 1], [1, 1, 0, 0], [], []],
-    // L2: four pours.
-    [[0, 1, 0, 1], [1, 0, 1, 0], [], []],
-    // L3: introduces the third tube dance.
-    [[0, 1, 1, 0], [1, 0, 0, 1], [0, 1, 0, 1], [], []],
+    // L2: 6 pours. Teaches using empty tubes as buffer space.
+    [[1, 1, 0, 1], [0, 0, 1, 0], [], []],
+    // L3: 7 pours. Introduces a third color.
+    [[0, 0, 1, 1], [1, 2, 2, 1], [2, 0, 0, 2], [], []],
   ];
   const tubes = layouts[level - 1].map((t) => [...t]);
-  const par = [2, 4, 6][level - 1];
+  const par = [3, 6, 7][level - 1];
   return {
     level,
     tubes,
