@@ -1,52 +1,44 @@
-# MudBar Game Template
+# Sort Stack
 
-Shared Expo foundation for all MudBar Entertainment hyper-casual titles.
-**Brand: MudBar Entertainment** — deliberately separate from Stratus Interactive.
+The satisfyingly perfect color-sort puzzle — pour, sort, clear.
+A **MudBar Entertainment** title (deliberately separate from Stratus Interactive).
 
-## Design reference: Ketchapp
+## Game
 
-Every game built on this template follows Ketchapp's proven formula:
+Tap a tube, tap a destination. Pour contiguous same-color balls until every
+tube is a single color or empty. 750+ procedural levels, daily challenge,
+tube skins + background collections, star ratings.
 
-1. **Single-gesture control** — one input, playable by anyone in 3 seconds
-2. **Boot straight into gameplay** — no menus, no tutorials, no gates; tap and play
-3. **Learn by failing** — no text instructions; the mechanic teaches itself
-4. **Instant restart** — fail → retry in under 2 seconds, always
-5. **Short feedback loop** — every action gets immediate visual/haptic response
-6. **Flat, minimal art** — must read clearly in a 15-second video ad
-7. **Endless or bottomless** — chase the top score, never "finish"
+Built on the shared MudBar game template (`~/workspace/game-template/`):
+AdMob ads, RevenueCat IAP, PostHog analytics, cross-promo hub.
 
-If a design decision conflicts with this list, the list wins.
+## Brand
 
-## What's included
+- Bundle ID: `com.mudbarentertainment.sortstack`
+- URL scheme: `mudbar-sortstack://`
+- Company: MudBar Entertainment
 
-| Module | Path | What it does |
+## IAP products (Evan creates in App Store Connect)
+
+| ID | Title | Price |
 |---|---|---|
-| Config | `lib/config.ts` + `game.config.json` | Per-game name, bundle IDs (`com.mudbarentertainment.*`), URL schemes (`mudbar-*://`), API keys |
-| Ads | `lib/ads/` | Rewarded (max 2/session), interstitial (max 1/3min, breaks only), banner (menus only) |
-| IAP | `lib/iap/` | RevenueCat, Remove Ads $4.99, coin packs, starter bundle, paywall UI |
-| Retention | `lib/retention/` | Daily rewards (streaks), level/best-score store, collections, haptics + sound |
-| Cross-promo | `lib/crosspromo/` | "More games from MudBar" sheet, house ads (every 5th slot), deep links, player UUID |
-| Analytics | `lib/analytics/` | PostHog, standardized events across all titles |
+| `remove_ads` | Remove Ads | $4.99 |
+| `coins_small` / `coins_medium` / `coins_large` | Coin packs | $0.99 / $1.99 / $3.99 |
+| `starter_bundle` | Starter Bundle | $2.99 |
+| `neon_tube_pack` | Neon Tube Pack | $1.99 |
+| `zen_backgrounds` | Zen Backgrounds | $0.99 |
 
-## Cloning for a new game
+## CI
 
-1. Copy this directory → `~/workspace/<game-slug>/`
-2. Edit **`game.config.json`**: name, slug, iosBundleId, androidPackage, urlScheme, tagline
-3. Replace **`app/index.tsx`** with the real game (keep the init calls in `app/_layout.tsx`)
-4. Add game art to **`assets/`** (icon.png, adaptive-icon.png, splash)
-5. Set EAS secrets: AdMob IDs, RevenueCat keys, PostHog key, cross-promo URL
-6. Define products in App Store Connect (Evan), matching IDs in `lib/iap/products.ts`
-7. `eas build --platform ios --profile production`
+`.github/workflows/eas-build.yml` triggers a production iOS build on every
+push to `main` — guarded by the `EXPO_TOKEN` repo secret. Evan's setup:
+1. Add `EXPO_TOKEN` in repo Settings → Secrets (one robot token for all games)
+2. Approve PRs — each merge ships a fresh TestFlight build
 
-**Don't touch** `lib/` unless fixing a shared bug — changes here affect all games.
+## Dev
 
-## Frequency caps (from monetization playbook — do not relax)
-
-- Rewarded: max **2** opportunities per session
-- Interstitial: max **1 per 3 minutes**, natural breaks only, **never** after a fail
-- Banner: menus/shop only, never during gameplay
-- House cross-promo ad: every **5th** interstitial slot
-
-## Kill criteria (at 2,000 installs)
-
-Kill or pivot if: D1 <20%, rewarded opt-in <8%, or ARPDAU <$0.015.
+```bash
+npm install
+npx tsc --noEmit   # typecheck
+npx expo start     # dev server
+```
