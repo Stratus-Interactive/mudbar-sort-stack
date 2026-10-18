@@ -106,9 +106,12 @@ export async function getRewardedCrossPromoGame(): Promise<{
   const game = games[rewardedIndex % games.length];
   rewardedIndex += 1;
   if (!game) return null;
-  const reward = DEFAULT_REWARDS[game.slug] ?? {
-    id: `xpromo_${game.slug}`,
-    name: `${game.name} Reward`,
+  // Reward is keyed by the CURRENT game's slug (CONFIG.slug), not the
+  // featured sister game's slug — the current app can only grant rewards
+  // from its own collection system.
+  const reward = DEFAULT_REWARDS[CONFIG.slug] ?? {
+    id: `xpromo_${CONFIG.slug}`,
+    name: 'Exclusive Reward',
     description: 'Exclusive reward',
     emoji: '🎁',
   };
