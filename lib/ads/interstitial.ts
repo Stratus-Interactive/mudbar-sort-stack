@@ -14,11 +14,7 @@ import {
 import { AD_UNITS, AD_LIMITS } from './config';
 import { Analytics, track } from '../analytics';
 import { shouldShowHouseAd, getHouseAdGame } from '../crosspromo/houseAds';
-import {
-  shouldShowRewardedCrossPromo,
-  getRewardedCrossPromoGame,
-  trackRewardedCrossPromoShown,
-} from '../crosspromo/RewardedCrossPromo';
+import { shouldShowRewardedCrossPromo } from '../crosspromo/RewardedCrossPromo';
 
 let interstitialAd: InterstitialAd | null = null;
 let isLoaded = false;
@@ -68,13 +64,13 @@ export function maybeShowInterstitial(
   // Every 8th slot → rewarded cross-promo (exclusive reward incentive)
   // Check before house ads so the 8th slot isn't swallowed by the 5th-slot rule
   // (8 and 5 are coprime — they only collide every 40th slot, which is fine)
+  //
+  // NOTE: the caller is responsible for fetching the game via
+  // getRewardedCrossPromoGame() and tracking via trackRewardedCrossPromoShown().
+  // We do NOT fetch here — that would advance the round-robin twice and
+  // misattribute the impression.
   if (shouldShowRewardedCrossPromo(interstitialCounter)) {
     lastShownAt = now;
-    void getRewardedCrossPromoGame().then((result) => {
-      if (result) {
-        trackRewardedCrossPromoShown(result.game.slug);
-      }
-    });
     return 'rewarded_xpromo';
   }
 
