@@ -1,0 +1,47 @@
+/**
+ * EAS Build CI — shared template for all MudBar Entertainment titles.
+ *
+ * Triggers a production iOS build on every push to main.
+ * Evan's only manual steps per game:
+ *   1. Add the EXPO_TOKEN repo secret (one robot token works for all games)
+ *   2. Approve PRs — each merge ships a fresh TestFlight build
+ *
+ * NOTE: This workflow intentionally builds iOS only. Android can be added
+ * by duplicating the eas-build step with --platform android.
+ */
+name: EAS Build
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch: # manual trigger from the Actions tab
+
+jobs:
+  build:
+    name: EAS production build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Typecheck
+        run: npx tsc --noEmit
+
+      - name: EAS production build (iOS)
+        if: secrets.EXPO_TOKEN != ''
+        run: npx eas-cli@latest build --platform ios --profile production --non-interactive
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+
+      - name: Skip notice (no EXPO_TOKEN)
+        if: secrets.EXPO_TOKEN == ''
+        run: echo "EXPO_TOKEN secret not set — skipping EAS build. Add it in repo Settings > Secrets to enable auto-builds."
