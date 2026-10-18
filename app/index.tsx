@@ -54,7 +54,7 @@ export default function GameScreen(): React.JSX.Element {
   const [ownedSkins, setOwnedSkins] = useState<string[]>(['slate']);
   const [ownedBgs, setOwnedBgs] = useState<string[]>(['ink']);
   const [phase, setPhase] = useState<'playing' | 'complete'>('playing');
-  const [completeInfo, setCompleteInfo] = useState<{ stars: 1 | 2 | 3; coins: number } | null>(null);
+  const [completeInfo, setCompleteInfo] = useState<{ stars: 1 | 2 | 3; coins: number; doubled: boolean } | null>(null);
   const [isDaily, setIsDaily] = useState(false);
   const [dailyDone, setDailyDone] = useState(false);
   const [dailyStreak, setDailyStreak] = useState(0);
@@ -179,7 +179,7 @@ export default function GameScreen(): React.JSX.Element {
           await markDailyDone();
           setDailyDone(true);
         }
-        setCompleteInfo({ stars, coins: coinReward });
+        setCompleteInfo({ stars, coins: coinReward, doubled: false });
         setPhase('complete');
         void Feedback.success();
         void track('level_complete', {
@@ -211,6 +211,7 @@ export default function GameScreen(): React.JSX.Element {
     setLocked(new Set(prev.locked));
     setHistory((h) => h.slice(0, -1));
     movesRef.current = Math.max(0, movesRef.current - 1);
+    poursRef.current = Math.max(0, poursRef.current - 1);
     setMoves(movesRef.current);
     void Feedback.tap();
   }, [phase, pour, history, levelKey]);
@@ -321,12 +322,12 @@ export default function GameScreen(): React.JSX.Element {
 
   /* ── double coins (rewarded) on level complete ── */
   const onDoubleCoins = useCallback(async () => {
-    if (!completeInfo || !canShowRewarded()) return;
+    if (!completeInfo || completeInfo.doubled || !canShowRewarded()) return;
     const watched = await showRewarded('double_coins');
     if (watched > 0) {
       const newCoins = await addCoins(completeInfo.coins);
       setCoins(newCoins);
-      setCompleteInfo({ ...completeInfo, coins: completeInfo.coins * 2 });
+      setCompleteInfo({ ...completeInfo, coins: completeInfo.coins * 2, doubled: true });
       void Feedback.success();
     }
   }, [completeInfo]);
@@ -413,7 +414,7 @@ export default function GameScreen(): React.JSX.Element {
         bgSoft={bg.bgSoft}
       />
 
-      {phase === 'complete' && completeInfo && (
+      {phase === 'complete' && completeInfo && !completeInfo.doubled && (
         <TouchableOpacity style={styles.doubleBtn} onPress={() => void onDoubleCoins()}>
           <Text style={styles.doubleText}>📺 Double coins</Text>
         </TouchableOpacity>
