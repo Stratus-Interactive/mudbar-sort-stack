@@ -5,21 +5,30 @@
  */
 import React, { useEffect, useMemo, useRef, useState, useCallback } from 'react';
 import {
-  View, Text, TouchableOpacity, StyleSheet, Dimensions, SafeAreaView,
+  View, Text, TouchableOpacity, StyleSheet, Dimensions, SafeAreaView, Modal,
 } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Analytics, track } from '../lib/analytics';
 import { Feedback } from '../lib/retention/feedback';
 import {
   getLevel, completeLevel, getCoins, addCoins, spendCoins,
 } from '../lib/retention/progression';
-import { getDailyStatus } from '../lib/retention/dailyRewards';
+import { getDailyStatus, claimDailyReward } from '../lib/retention/dailyRewards';
+import { maybeRequestReview, markSessionFail } from '../lib/retention/reviewPrompt';
+import { requestStreakPushPermission } from '../lib/retention/streakPush';
+import { ShareCard, trackShareCardShown } from '../lib/viral';
 import { getOwned, getEquipped, unlock, equip, isOwned } from '../lib/retention/collections';
 import { canShowRewarded, showRewarded, maybeShowInterstitial } from '../lib/ads';
-import { MoreGamesSheet } from '../lib/crosspromo';
+import {
+  MoreGamesSheet, RewardedCrossPromo, getRewardedCrossPromoGame,
+  CrossPromoReward, SisterGame,
+} from '../lib/crosspromo';
 import { purchaseProduct } from '../lib/iap';
 import { PRODUCTS } from '../lib/iap/products';
+import { shouldShowFailOffer, recordFailOfferShown, FailOfferKind } from '../lib/iap/failOffer';
+import { FailOfferSheet } from '../lib/iap/FailOfferSheet';
 import {
-  generateLevel, generateDailyLevel, applyPour, isComplete, starsForMoves,
+  generateLevel, generateDailyLevel, applyPour, isComplete, hasValidMove, starsForMoves,
   LevelData, Tube,
 } from '../game/level';
 import { SortBoard, PourAnim } from '../game/Board';
@@ -31,6 +40,20 @@ import {
 
 const ACCENT = '#2A9D8F';
 const { width: SCREEN_W } = Dimensions.get('window');
+
+/** Push permission is requested once — right after the first daily reward claim. */
+const K_PUSH_ASKED = '@sortstack/streak_push_asked_v1';
+
+async function requestStreakPushPermissionOnce(): Promise<void> {
+  try {
+    const asked = await AsyncStorage.getItem(K_PUSH_ASKED);
+    if (asked) return;
+    await AsyncStorage.setItem(K_PUSH_ASKED, '1');
+    await requestStreakPushPermission();
+  } catch {
+    /* permission failures are silent — never block gameplay */
+  }
+}
 
 interface HistoryEntry {
   tubes: Tube[];
@@ -62,6 +85,11 @@ export default function GameScreen(): React.JSX.Element {
   const [showDaily, setShowDaily] = useState(false);
   const [showMoreGames, setShowMoreGames] = useState(false);
   const [boardWidth, setBoardWidth] = useState(SCREEN_W);
+  // Marketing features (shared template modules)
+  const [showShare, setShowShare] = useState(false);
+  const [shareLevel, setShareLevel] = useState(1);
+  const [xpromo, setXpromo] = useState<{ game: SisterGame; reward: CrossPromoReward } | null>(null);
+  const [failOfferKind, setFailOfferKind] = useState<FailOfferKind | null>(null);
 
   const movesRef = useRef(0);
   const poursRef = useRef(0);
@@ -155,8 +183,10 @@ export default function GameScreen(): React.JSX.Element {
     poursRef.current += 1;
 
     // Unlock check
-    if (locked.size > 0 && poursRef.current >= data.unlockAfterMoves) {
-      setLocked(new Set());
+    const unlockNow = locked.size > 0 && poursRef.current >= data.unlockAfterMoves;
+    const nextLocked: Set<number> = unlockNow ? new Set() : locked;
+    if (unlockNow) {
+      setLocked(nextLocked);
       void Feedback.milestone();
     }
 
@@ -167,18 +197,31 @@ export default function GameScreen(): React.JSX.Element {
     if (isComplete(committed, capacities)) {
       const stars = starsForMoves(nextMoves, data.par);
       const clearedLevel = level;
-      const coinReward = isDaily ? 150 : 20 + stars * 10 + clearedLevel;
       void (async () => {
-        const newCoins = await addCoins(coinReward);
-        setCoins(newCoins);
+        let chestCoins = 0;
         if (!isDaily) {
           await completeLevel(clearedLevel);
           await setStars(clearedLevel, stars);
           setLevel(clearedLevel + 1);
         } else {
+          // Daily chest: streak-tracked claim. The first successful claim is
+          // the push-permission opt-in moment (2x opt-in vs asking on launch).
           await markDailyDone();
           setDailyDone(true);
+          chestCoins = await claimDailyReward();
+          const status = await getDailyStatus();
+          setDailyStreak(status.streakDay);
+          if (chestCoins > 0) {
+            void requestStreakPushPermissionOnce();
+            if (status.streakDay === 7) {
+              void maybeRequestReview('streak_7_day');
+            }
+          }
         }
+        const coinReward = (isDaily ? 150 : 20 + stars * 10 + clearedLevel) + chestCoins;
+        const newCoins = await addCoins(coinReward);
+        setCoins(newCoins);
+
         setCompleteInfo({ stars, coins: coinReward, doubled: false });
         setPhase('complete');
         void Feedback.success();
@@ -187,11 +230,42 @@ export default function GameScreen(): React.JSX.Element {
           stars,
           moves: nextMoves,
         });
+
+        // Perfect-clear delight moments: share card + review prompt (level 10+).
+        if (stars === 3 && !isDaily) {
+          if (clearedLevel >= 10) {
+            void maybeRequestReview('perfect_clear');
+          }
+          trackShareCardShown('perfect_clear');
+          setShareLevel(clearedLevel);
+          setShowShare(true);
+        }
+
         // Interstitial every 4th level clear (natural break only).
+        // Every 8th slot is a rewarded cross-promo — render the card instead.
         if (!isDaily && clearedLevel % 4 === 0) {
-          maybeShowInterstitial('level_complete');
+          const slot = maybeShowInterstitial('level_complete');
+          if (slot === 'rewarded_xpromo') {
+            const promo = await getRewardedCrossPromoGame();
+            if (promo) {
+              setXpromo({ game: promo.game, reward: promo.reward });
+            }
+          }
         }
       })();
+    } else if (!hasValidMove(committed, capacities, nextLocked)) {
+      // Deadlock: no valid moves remain — a fail for review-prompt gating.
+      void markSessionFail();
+      // "Close" loss = deadlock after 50+ moves (playbook definition).
+      if (nextMoves >= 50) {
+        void (async () => {
+          const kind = await shouldShowFailOffer({ wasClose: true });
+          if (kind) {
+            setFailOfferKind(kind);
+            await recordFailOfferShown(kind);
+          }
+        })();
+      }
     }
   }, [pour, data, tubes, capacities, locked, isDaily, level]);
 
@@ -332,6 +406,27 @@ export default function GameScreen(): React.JSX.Element {
     }
   }, [completeInfo]);
 
+  /* ── rewarded cross-promo: grant the exclusive reward on claim ── */
+  const grantCrossPromoReward = useCallback(async (reward: CrossPromoReward) => {
+    // v1: the exclusive reward items live in the featured game; this game
+    // grants a coin bonus for trying the sister title (zero verification
+    // friction). Upgrade to a real exclusive skin in v2.
+    const newCoins = await addCoins(150);
+    setCoins(newCoins);
+    void track('xpromo_reward_granted', { reward_id: reward.id });
+  }, []);
+
+  /* ── fail offer purchased ── */
+  const onFailOfferPurchased = useCallback(async () => {
+    // Revive offer CTA is "Revive + 200 coins"; remove-ads is handled by the
+    // RevenueCat entitlement listener.
+    if (failOfferKind === 'revive') {
+      const newCoins = await addCoins(200);
+      setCoins(newCoins);
+      void Feedback.success();
+    }
+  }, [failOfferKind]);
+
   if (!data) {
     return (
       <SafeAreaView style={[styles.loading, { backgroundColor: bg.bg }]}>
@@ -454,6 +549,50 @@ export default function GameScreen(): React.JSX.Element {
       />
 
       <MoreGamesSheet visible={showMoreGames} onClose={() => setShowMoreGames(false)} />
+
+      {/* Perfect-clear share card (3-star level clear) */}
+      <Modal
+        visible={showShare}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setShowShare(false)}
+      >
+        <View style={styles.shareDim}>
+          <View style={[styles.shareSheet, { backgroundColor: bg.bgSoft }]}>
+            <ShareCard
+              headline={`Perfect clear — Level ${shareLevel}!`}
+              stat={String(shareLevel)}
+              statLabel="LEVEL"
+              accentColor="#8b5cf6"
+              emoji="🧪"
+              subline="Sort Stack · Can you do it?"
+              onShared={() => void refreshOwned()}
+            />
+            <TouchableOpacity style={styles.closeBtn} onPress={() => setShowShare(false)}>
+              <Text style={[styles.closeText, { color: bg.textDim }]}>Close</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Rewarded cross-promo (every 8th interstitial slot) */}
+      {xpromo && (
+        <RewardedCrossPromo
+          game={xpromo.game}
+          reward={xpromo.reward}
+          onClaim={(reward) => void grantCrossPromoReward(reward)}
+          onClose={() => setXpromo(null)}
+        />
+      )}
+
+      {/* Fail-triggered IAP offer (deadlock after 50+ moves) */}
+      <FailOfferSheet
+        visible={failOfferKind !== null}
+        kind={failOfferKind ?? 'revive'}
+        headline="Stuck? Get unstuck!"
+        onClose={() => setFailOfferKind(null)}
+        onPurchased={() => void onFailOfferPurchased()}
+      />
     </SafeAreaView>
   );
 }
@@ -492,4 +631,21 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
   },
   doubleText: { color: '#fff', fontWeight: '700' },
+  shareDim: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.7)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 24,
+  },
+  shareSheet: {
+    borderRadius: 24,
+    paddingTop: 4,
+    paddingBottom: 10,
+    width: '100%',
+    maxWidth: 380,
+    alignItems: 'center',
+  },
+  closeBtn: { marginTop: 2, padding: 10 },
+  closeText: { fontSize: 15, fontWeight: '600' },
 });

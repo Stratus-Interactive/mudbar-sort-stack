@@ -127,6 +127,21 @@ export function isComplete(tubes: Tube[], capacities: number[]): boolean {
   });
 }
 
+/** True if any legal pour exists. Used for deadlock detection. */
+export function hasValidMove(
+  tubes: Tube[],
+  capacities: number[],
+  locked: Set<number>,
+): boolean {
+  for (let from = 0; from < tubes.length; from++) {
+    if (locked.has(from) || tubes[from].length === 0) continue;
+    for (let to = 0; to < tubes.length; to++) {
+      if (canPour(tubes, capacities, locked, from, to)) return true;
+    }
+  }
+  return false;
+}
+
 /* ── Bounded solver (sanity check for generated levels) ──────────── */
 
 function stateKey(tubes: Tube[]): string {

@@ -5,6 +5,7 @@
  * - ONLY at natural breaks (level complete, run end) — never after a fail,
  *   never mid-action. Poor timing cuts D7 retention 10–25%.
  * - Every 5th slot is a house cross-promo ad instead (see crosspromo).
+ * - Every 8th slot is a REWARDED cross-promo (higher value, less frequent).
  */
 import {
   InterstitialAd,
@@ -13,7 +14,11 @@ import {
 import { AD_UNITS, AD_LIMITS } from './config';
 import { Analytics, track } from '../analytics';
 import { shouldShowHouseAd, getHouseAdGame } from '../crosspromo/houseAds';
-import type { SisterGame } from '../crosspromo/config';
+import {
+  shouldShowRewardedCrossPromo,
+  getRewardedCrossPromoGame,
+  trackRewardedCrossPromoShown,
+} from '../crosspromo/RewardedCrossPromo';
 
 let interstitialAd: InterstitialAd | null = null;
 let isLoaded = false;
@@ -46,28 +51,40 @@ export function initInterstitialAds(): void {
 /**
  * Attempt to show an interstitial at a natural break.
  * @param placement e.g. "level_complete", "run_end"
- * @returns 'ad' | 'house' | 'skipped' — 'house' means the caller should
- *   render the cross-promo house ad instead of an AdMob interstitial.
+ * @returns 'ad' | 'house' | 'rewarded_xpromo' | 'skipped'
+ *   - 'house' means the caller should render the cross-promo house ad
+ *   - 'rewarded_xpromo' means the caller should render the rewarded
+ *     cross-promo card (every 8th slot, higher value)
  */
 export function maybeShowInterstitial(
   placement: string,
-  onHouseAd?: (game: SisterGame) => void,
-): 'ad' | 'house' | 'skipped' {
+): 'ad' | 'house' | 'rewarded_xpromo' | 'skipped' {
   const now = Date.now();
   if (now - lastShownAt < AD_LIMITS.interstitialMinIntervalMs) {
     return 'skipped';
   }
   interstitialCounter += 1;
 
-  // Every 5th slot → house cross-promo ad (zero cost, full control).
-  // Only take the house slot when the caller wired a UI handler for it;
-  // otherwise fall through to AdMob — never silently drop a revenue slot.
-  if (shouldShowHouseAd(interstitialCounter) && onHouseAd) {
+  // Every 8th slot → rewarded cross-promo (exclusive reward incentive)
+  // Check before house ads so the 8th slot isn't swallowed by the 5th-slot rule
+  // (8 and 5 are coprime — they only collide every 40th slot, which is fine)
+  if (shouldShowRewardedCrossPromo(interstitialCounter)) {
     lastShownAt = now;
+    void getRewardedCrossPromoGame().then((result) => {
+      if (result) {
+        trackRewardedCrossPromoShown(result.game.slug);
+      }
+    });
+    return 'rewarded_xpromo';
+  }
+
+  // Every 5th slot → house cross-promo ad (zero cost, full control)
+  if (shouldShowHouseAd(interstitialCounter)) {
+    lastShownAt = now;
+    // Async — fire and forget; fall through to AdMob if no game configured
     void getHouseAdGame().then((game) => {
       if (game) {
         void track('house_ad_shown', { target_game: game.slug });
-        onHouseAd(game);
       }
     });
     return 'house';

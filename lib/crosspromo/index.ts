@@ -6,3 +6,11 @@ export { getSisterGames, getOrderedGames } from './config';
 export type { SisterGame } from './config';
 export { getPlayerId } from './playerId';
 export { MoreGamesSheet } from './MoreGamesSheet';
+export {
+  RewardedCrossPromo,
+  shouldShowRewardedCrossPromo,
+  getRewardedCrossPromoGame,
+  trackRewardedCrossPromoShown,
+  REWARDED_XPROMO_SLOT,
+} from './RewardedCrossPromo';
+export type { CrossPromoReward, RewardedCrossPromoProps } from './RewardedCrossPromo';
