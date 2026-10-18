@@ -34,8 +34,9 @@ function createAd(): RewardedAd {
     rewardedAd = createAd();
     rewardedAd.load();
     if (pendingReward) {
-      // Closed without earning — resolve with 0
-      pendingReward.resolve(0);
+      // Closed without earning the reward — reject so callers treat
+      // this as "dismissed" and do NOT grant the reward.
+      pendingReward.reject(new Error('Ad closed before reward earned'));
       pendingReward = null;
     }
   });
