@@ -1,14 +1,12 @@
-/**
- * EAS Build CI — shared template for all MudBar Entertainment titles.
- *
- * Triggers a production iOS build on every push to main.
- * Evan's only manual steps per game:
- *   1. Add the EXPO_TOKEN repo secret (one robot token works for all games)
- *   2. Approve PRs — each merge ships a fresh TestFlight build
- *
- * NOTE: This workflow intentionally builds iOS only. Android can be added
- * by duplicating the eas-build step with --platform android.
- */
+# EAS Build CI - shared template for all MudBar Entertainment titles.
+#
+# Triggers a production iOS build on every push to main.
+# Evan's only manual steps per game:
+#   1. Add the EXPO_TOKEN repo secret (one robot token works for all games)
+#   2. Approve PRs - each merge ships a fresh TestFlight build
+#
+# NOTE: This workflow intentionally builds iOS only. Android can be added
+# by duplicating the eas-build step with --platform android.
 name: EAS Build
 
 on:
