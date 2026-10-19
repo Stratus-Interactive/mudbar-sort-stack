@@ -31,7 +31,9 @@ jobs:
           cache: npm
 
       - name: Install dependencies
-        run: npm ci
+        # --legacy-peer-deps: expo-router's peer ranges conflict under plain
+        # npm ci (ERESOLVE). Same flag as the other MudBar game repos.
+        run: npm ci --legacy-peer-deps
 
       - name: Typecheck
         run: npx tsc --noEmit
