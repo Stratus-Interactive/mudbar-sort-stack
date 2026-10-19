@@ -37,11 +37,11 @@ jobs:
         run: npx tsc --noEmit
 
       - name: EAS production build (iOS)
-        if: secrets.EXPO_TOKEN != ''
-        run: npx eas-cli@latest build --platform ios --profile production --non-interactive
+        run: |
+          if [ -z "$EXPO_TOKEN" ]; then
+            echo "EXPO_TOKEN secret not set - skipping EAS build. Add it in repo Settings > Secrets > Actions to enable auto-builds."
+          else
+            npx eas-cli@latest build --platform ios --profile production --non-interactive
+          fi
         env:
           EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
-
-      - name: Skip notice (no EXPO_TOKEN)
-        if: secrets.EXPO_TOKEN == ''
-        run: echo "EXPO_TOKEN secret not set — skipping EAS build. Add it in repo Settings > Secrets to enable auto-builds."
