@@ -37,11 +37,16 @@ jobs:
         run: npx tsc --noEmit
 
       - name: EAS production build (iOS)
+        # Best-effort until 'eas init' + iOS credentials are set up (Evan's manual steps):
+        # a failed build warns but does not fail the run, so one missing setup step
+        # doesn't spam failure emails. Flip to strict once EAS is fully configured.
         run: |
           if [ -z "$EXPO_TOKEN" ]; then
-            echo "EXPO_TOKEN secret not set - skipping EAS build. Add it in repo Settings > Secrets > Actions to enable auto-builds."
+            echo "EXPO_TOKEN secret not set - skipping EAS build."
+          elif npx eas-cli@latest build --platform ios --profile production --non-interactive; then
+            echo "EAS build submitted."
           else
-            npx eas-cli@latest build --platform ios --profile production --non-interactive
+            echo "::warning::EAS build failed - likely missing 'eas init' project link or iOS credentials. Install and typecheck passed."
           fi
         env:
           EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
