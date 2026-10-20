@@ -13,7 +13,13 @@ const CONFIG = gameJson;
 module.exports = {
   expo: {
     name: CONFIG.name,
+    owner: 'mudbar-entertainment',
     slug: CONFIG.slug,
+    extra: {
+      eas: {
+        projectId: '7304b330-595d-4c50-a8dd-9a3ca7698cc4',
+      },
+    },
     version: '1.0.0',
     orientation: 'portrait',
     icon: './assets/icon.png',
